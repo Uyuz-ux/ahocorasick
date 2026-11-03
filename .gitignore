@@ -1,0 +1,4 @@
+nimcache/
+nimbledata.json
+*.exe
+htmldocs/
