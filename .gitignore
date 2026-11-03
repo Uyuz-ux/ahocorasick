@@ -2,3 +2,4 @@ nimcache/
 nimbledata.json
 *.exe
 htmldocs/
+tests/tahocorasick
