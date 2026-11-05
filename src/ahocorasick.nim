@@ -18,7 +18,7 @@
 ##
 ## Unrestricted license.
 
-import std/[tables, strutils]
+import std/[tables, strutils, algorithm]
 
 type
   Match* = object
@@ -176,3 +176,61 @@ proc containsAny*(a: AhoCorasick, text: string): bool =
 proc len*(a: AhoCorasick): int =
   ## Number of patterns in the automaton.
   a.nPatterns
+
+proc keptMatches(a: AhoCorasick; text: string): seq[Match] =
+  ## Leftmost-longest selection over all occurrences in `text`: at each
+  ## scan position the longest pattern that starts there wins, and the
+  ## scan resumes right after it. Overlapping shorter matches are
+  ## dropped, not re-entered.
+  var best = initTable[int, Match]() # start -> longest match starting there
+  for m in a.search(text):
+    if m.last > best.getOrDefault(m.start,
+        Match(patternIndex: -1, start: -1, last: -1)).last:
+      best[m.start] = m
+  var starts: seq[int]
+  for s in keys(best):
+    starts.add(s)
+  sort(starts)
+  var prevLast = -1
+  for s in starts:
+    if s > prevLast:
+      let m = best[s]
+      result.add(m)
+      prevLast = m.last
+
+proc replace*(a: AhoCorasick; text: string; replacement: string): string =
+  ## Scan `text` and replace every match with `replacement`.
+  ##
+  ## Matches are chosen leftmost-longest: scanning conceptually moves
+  ## left to right, takes the longest pattern starting at each position,
+  ## and resumes right after it. Overlapping shorter matches are never
+  ## re-entered - with patterns @["cat", "cats"], "cats" is replaced
+  ## once by the `cats` rule, not twice. Use `findAll` directly when you
+  ## need every occurrence instead.
+  ##
+  ## Offsets stay on UTF-8 code point boundaries for valid UTF-8 input,
+  ## so whole-code-point replacements never tear a character apart.
+  let kept = keptMatches(a, text)
+  result = newStringOfCap(text.len)
+  var pos = 0
+  for m in kept:
+    result.add(text[pos ..< m.start])
+    result.add(replacement)
+    pos = m.last + 1
+  if pos <= text.high:
+    result.add(text[pos .. text.high])
+
+proc replace*(a: AhoCorasick; text: string;
+              mapping: proc (m: Match): string): string =
+  ## Overload that computes the replacement per kept match. `mapping`
+  ## receives each leftmost-longest `Match` (patternIndex, start, last)
+  ## and returns the text to substitute it with.
+  let kept = keptMatches(a, text)
+  result = newStringOfCap(text.len)
+  var pos = 0
+  for m in kept:
+    result.add(text[pos ..< m.start])
+    result.add(mapping(m))
+    pos = m.last + 1
+  if pos <= text.high:
+    result.add(text[pos .. text.high])

@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.0"
+version       = "0.2.0"
 author        = "Uyuz-ux"
 description   = "Aho-Corasick multi-pattern string search: report every occurrence of every pattern in one pass"
 license       = "MIT"

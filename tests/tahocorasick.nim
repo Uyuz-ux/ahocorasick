@@ -102,3 +102,48 @@ suite "ahocorasick":
     # And a second corpus without any pattern except single letters.
     let text2 = "zzz qqq www kkk"
     check sortedMs(ac.findAll(text2)) == naiveMatches(pats, text2)
+
+suite "replace (leftmost-longest)":
+  test "basic replacement, repeated matches":
+    let ac = initAhoCorasick(@["cat"])
+    check ac.replace("the cat sat on a cat", "dog") == "the dog sat on a dog"
+    check ac.replace("catcat", "dog") == "dogdog"
+  test "longest pattern wins at a shared start":
+    let ac = initAhoCorasick(@["cat", "cats"])
+    check ac.replace("cats", "X") == "X"
+    check ac.replace("cat", "X") == "X"
+    check ac.replace("cats and cats", "X") == "X and X"
+    # Pattern order must not matter.
+    let rev = initAhoCorasick(@["cats", "cat"])
+    check rev.replace("cats", "X") == "X"
+  test "scanning resumes after a kept match":
+    let ac = initAhoCorasick(@["aa", "aaa"])
+    # start 0: "aaa" (0..2) wins; scan resumes at 3, "a" alone matches nothing.
+    check ac.replace("aaaa", "Z") == "Za"
+    let single = initAhoCorasick(@["a"])
+    check single.replace("aaaa", "Z") == "ZZZZ"
+  test "no match returns text unchanged; empty text handled":
+    let ac = initAhoCorasick(@["zzz"])
+    check ac.replace("abcabc", "Q") == "abcabc"
+    check ac.replace("", "Q") == ""
+    let empty = initAhoCorasick(@[])
+    check empty.replace("abc", "Q") == "abc"
+    check empty.replace("", "Q") == ""
+  test "utf-8: replacements stay on code point boundaries":
+    let ac = initAhoCorasick(@["üş"])
+    # "üşümüş" holds two occurrences: bytes 0..3 and the final pair.
+    check ac.replace("üşümüş", "UŞ") == "UŞümUŞ"
+    # A 2-byte code point (ş) is replaced as a whole, neighbours intact.
+    let acc = initAhoCorasick(@["ş"])
+    check acc.replace("keşkek", "S") == "keSkek"
+    let ac2 = initAhoCorasick(@["kediler"])
+    # The trailing "i" of "kedileri" belongs to no pattern and survives.
+    check ac2.replace("şefin kedileri", "kuzular") == "şefin kuzulari"
+  test "mapping overload replaces per kept match":
+    let ac = initAhoCorasick(@["cat", "cats", "dog"])
+    let fn = proc (m: Match): string =
+      if m.patternIndex == 1: "felines" else: "canines"
+    let got = ac.replace("cats and dogs", fn)
+    # Kept: "cats" (index 1) and "dog" (index 2); the trailing "s" of
+    # "dogs" is not part of any pattern and survives untouched.
+    check got == "felines and caniness"

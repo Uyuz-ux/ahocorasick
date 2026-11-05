@@ -39,6 +39,20 @@ let all = ac.findAll("ushers")        # seq[Match]
 let hit = ac.containsAny("ushers")    # true, exits at the first hit
 ```
 
+Multi-pattern replacement (leftmost-longest):
+
+```nim
+let censor = initAhoCorasick(@["cat", "cats"])
+echo censor.replace("cats and cat", "*")   # * and *
+
+echo censor.replace("cats", "*")           # *  - "cats" wins once over "cat"
+
+# Per-match replacements: mapping receives the kept Match.
+echo censor.replace("cats and cat") do (m: Match) -> string:
+  if m.patternIndex == 1: "CATS" else: "CAT"
+# CATS and CAT
+```
+
 See `examples/` for complete runnable programs: a log-line filter and a
 match report over a sample text.
 
@@ -50,6 +64,8 @@ match report over a sample text.
 | `iterator search(a, text: string): Match` | One pass over `text`; yields every occurrence, overlapping included. |
 | `findAll(a, text: string): seq[Match]` | Eager `search`. |
 | `containsAny(a, text: string): bool` | True when any pattern occurs; early exit on first hit. |
+| `replace(a, text, replacement: string): string` | Replaces every match with `replacement`, leftmost-longest. |
+| `replace(a, text, mapping: proc (m: Match): string): string` | Replaces each kept match with a computed string. |
 | `len(a): int` | Number of patterns in the automaton. |
 
 `Match` fields: `patternIndex` (index into the pattern list),
@@ -59,6 +75,11 @@ match report over a sample text.
 
 - **Nothing is skipped.** Matches are reported by end position; matches
   ending at the same position come longest-first.
+- **`replace` is leftmost-longest.** At each scan position the longest
+  pattern starting there wins and scanning resumes after it; overlapping
+  shorter matches are not re-entered (patterns `cat`+`cats` turn `cats`
+  into one replacement, not two). Use `findAll` when you need every
+  occurrence instead.
 - **Byte offsets, UTF-8 safe.** Matching is byte-oriented; because
   UTF-8 is self-synchronizing, a byte-level match in valid UTF-8 text
   can never start mid-code-point, so offsets always fall on code point
